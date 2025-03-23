@@ -156,6 +156,10 @@ func main() {
 		ResolveLoadBalancerHostname:    cfg.ResolveServiceLoadBalancerHostname,
 		TraefikDisableLegacy:           cfg.TraefikDisableLegacy,
 		TraefikDisableNew:              cfg.TraefikDisableNew,
+		NomadAddress:                   cfg.NomadAddress,
+		NomadRegion:                    cfg.NomadRegion,
+		NomadToken:                     cfg.NomadToken,
+		NomadWaitTime:                  cfg.NomadWaitTime,
 	}
 
 	// Lookup all the selected sources by names and pass them the desired configuration.

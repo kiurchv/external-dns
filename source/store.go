@@ -25,6 +25,7 @@ import (
 	"time"
 
 	"github.com/cloudfoundry-community/go-cfclient"
+	nomad "github.com/hashicorp/nomad/api"
 	"github.com/linki/instrumented_http"
 	openshift "github.com/openshift/client-go/route/clientset/versioned"
 	"github.com/pkg/errors"
@@ -80,6 +81,10 @@ type Config struct {
 	ResolveLoadBalancerHostname    bool
 	TraefikDisableLegacy           bool
 	TraefikDisableNew              bool
+	NomadAddress                   string
+	NomadRegion                    string
+	NomadToken                     string
+	NomadWaitTime                  time.Duration
 }
 
 // ClientGenerator provides clients
@@ -90,6 +95,7 @@ type ClientGenerator interface {
 	CloudFoundryClient(cfAPPEndpoint string, cfUsername string, cfPassword string) (*cfclient.Client, error)
 	DynamicKubernetesClient() (dynamic.Interface, error)
 	OpenShiftClient() (openshift.Interface, error)
+	NomadClient(address string, namespace string, region string, token string, waitTime time.Duration) (*nomad.Client, error)
 }
 
 // SingletonClientGenerator stores provider clients and guarantees that only one instance of client
@@ -104,12 +110,14 @@ type SingletonClientGenerator struct {
 	cfClient        *cfclient.Client
 	dynKubeClient   dynamic.Interface
 	openshiftClient openshift.Interface
+	nomadClient     *nomad.Client
 	kubeOnce        sync.Once
 	gatewayOnce     sync.Once
 	istioOnce       sync.Once
 	cfOnce          sync.Once
 	dynCliOnce      sync.Once
 	openshiftOnce   sync.Once
+	nomadOnce       sync.Once
 }
 
 // KubeClient generates a kube client if it was not created before
@@ -192,6 +200,15 @@ func (p *SingletonClientGenerator) OpenShiftClient() (openshift.Interface, error
 		p.openshiftClient, err = NewOpenShiftClient(p.KubeConfig, p.APIServerURL, p.RequestTimeout)
 	})
 	return p.openshiftClient, err
+}
+
+// NomadClient generates a nomad client if it was not created before
+func (p *SingletonClientGenerator) NomadClient(address string, namespace string, region string, token string, waitTime time.Duration) (*nomad.Client, error) {
+	var err error
+	p.nomadOnce.Do(func() {
+		p.nomadClient, err = NewNomadClient(address, namespace, region, token, waitTime)
+	})
+	return p.nomadClient, err
 }
 
 // ByNames returns multiple Sources given multiple names.
@@ -368,6 +385,12 @@ func BuildWithConfig(ctx context.Context, source string, p ClientGenerator, cfg 
 			return nil, err
 		}
 		return NewF5TransportServerSource(ctx, dynamicClient, kubernetesClient, cfg.Namespace, cfg.AnnotationFilter)
+	case "nomad":
+		nomadClient, err := p.NomadClient(cfg.NomadAddress, cfg.Namespace, cfg.NomadRegion, cfg.NomadToken, cfg.NomadWaitTime)
+		if err != nil {
+			return nil, err
+		}
+		return NewNomadSource(ctx, nomadClient, cfg.Namespace, cfg.AnnotationFilter, cfg.FQDNTemplate, cfg.CombineFQDNAndAnnotation, cfg.IgnoreHostnameAnnotation)
 	}
 
 	return nil, ErrSourceNotFound
@@ -494,5 +517,29 @@ func NewOpenShiftClient(kubeConfig, apiServerURL string, requestTimeout time.Dur
 		return nil, err
 	}
 	log.Infof("Created OpenShift client %s", config.Host)
+	return client, nil
+}
+
+func NewNomadClient(address string, namespace string, region string, token string, waitTime time.Duration) (*nomad.Client, error) {
+	config := nomad.DefaultConfig()
+	if address != "" {
+		config.Address = address
+	}
+	if region != "" {
+		config.Region = region
+	}
+	if token != "" {
+		config.SecretID = token
+	}
+	if waitTime.Nanoseconds() > 0 {
+		config.WaitTime = waitTime
+	}
+
+	client, err := nomad.NewClient(config)
+	if err != nil {
+		return nil, err
+	}
+
+	log.Infof("Created Nomad client %s", config.Address)
 	return client, nil
 }
