@@ -95,7 +95,7 @@ type ClientGenerator interface {
 	CloudFoundryClient(cfAPPEndpoint string, cfUsername string, cfPassword string) (*cfclient.Client, error)
 	DynamicKubernetesClient() (dynamic.Interface, error)
 	OpenShiftClient() (openshift.Interface, error)
-	NomadClient(address string, namespace string, region string, token string, waitTime time.Duration) (*nomad.Client, error)
+	NomadClient(address string, region string, token string, waitTime time.Duration) (*nomad.Client, error)
 }
 
 // SingletonClientGenerator stores provider clients and guarantees that only one instance of client
@@ -203,10 +203,10 @@ func (p *SingletonClientGenerator) OpenShiftClient() (openshift.Interface, error
 }
 
 // NomadClient generates a nomad client if it was not created before
-func (p *SingletonClientGenerator) NomadClient(address string, namespace string, region string, token string, waitTime time.Duration) (*nomad.Client, error) {
+func (p *SingletonClientGenerator) NomadClient(address string, region string, token string, waitTime time.Duration) (*nomad.Client, error) {
 	var err error
 	p.nomadOnce.Do(func() {
-		p.nomadClient, err = NewNomadClient(address, namespace, region, token, waitTime)
+		p.nomadClient, err = NewNomadClient(address, region, token, waitTime)
 	})
 	return p.nomadClient, err
 }
@@ -386,11 +386,11 @@ func BuildWithConfig(ctx context.Context, source string, p ClientGenerator, cfg 
 		}
 		return NewF5TransportServerSource(ctx, dynamicClient, kubernetesClient, cfg.Namespace, cfg.AnnotationFilter)
 	case "nomad":
-		nomadClient, err := p.NomadClient(cfg.NomadAddress, cfg.Namespace, cfg.NomadRegion, cfg.NomadToken, cfg.NomadWaitTime)
+		nomadClient, err := p.NomadClient(cfg.NomadAddress, cfg.NomadRegion, cfg.NomadToken, cfg.NomadWaitTime)
 		if err != nil {
 			return nil, err
 		}
-		return NewNomadSource(ctx, nomadClient, cfg.Namespace, cfg.AnnotationFilter, cfg.FQDNTemplate, cfg.CombineFQDNAndAnnotation, cfg.IgnoreHostnameAnnotation)
+		return NewNomadSource(ctx, nomadClient, cfg.Namespace, cfg.FQDNTemplate, cfg.CombineFQDNAndAnnotation, cfg.IgnoreHostnameAnnotation)
 	}
 
 	return nil, ErrSourceNotFound
@@ -520,7 +520,7 @@ func NewOpenShiftClient(kubeConfig, apiServerURL string, requestTimeout time.Dur
 	return client, nil
 }
 
-func NewNomadClient(address string, namespace string, region string, token string, waitTime time.Duration) (*nomad.Client, error) {
+func NewNomadClient(address string, region string, token string, waitTime time.Duration) (*nomad.Client, error) {
 	config := nomad.DefaultConfig()
 	if address != "" {
 		config.Address = address
