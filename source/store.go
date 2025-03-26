@@ -385,12 +385,12 @@ func BuildWithConfig(ctx context.Context, source string, p ClientGenerator, cfg 
 			return nil, err
 		}
 		return NewF5TransportServerSource(ctx, dynamicClient, kubernetesClient, cfg.Namespace, cfg.AnnotationFilter)
-	case "nomad":
+	case "nomad-service":
 		nomadClient, err := p.NomadClient(cfg.NomadAddress, cfg.NomadRegion, cfg.NomadToken, cfg.NomadWaitTime)
 		if err != nil {
 			return nil, err
 		}
-		return NewNomadSource(ctx, nomadClient, cfg.Namespace, cfg.FQDNTemplate, cfg.CombineFQDNAndAnnotation, cfg.IgnoreHostnameAnnotation)
+		return NewNomadServiceSource(ctx, nomadClient, cfg.Namespace, cfg.FQDNTemplate, cfg.CombineFQDNAndAnnotation, cfg.IgnoreHostnameAnnotation)
 	}
 
 	return nil, ErrSourceNotFound
